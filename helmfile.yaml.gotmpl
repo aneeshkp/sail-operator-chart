@@ -39,7 +39,7 @@ releases:
         value: {{ .Values.bundle.version }}
 {{- if .Values.useSystemPodmanAuth }}
       - name: pullSecret.dockerConfigJson
-        file: {{ env "XDG_RUNTIME_DIR" }}/containers/auth.json
+        file: {{ env "HOME" }}/.config/containers/auth.json
 {{- else if .Values.pullSecretFile }}
       - name: pullSecret.dockerConfigJson
         file: {{ .Values.pullSecretFile }}

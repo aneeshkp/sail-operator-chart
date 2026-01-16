@@ -12,8 +12,8 @@ pullSecret:
   dockerConfigJson: ""  # Set via --set-file or environments/default.yaml
 
 # Auth source (set ONE of these in environments/default.yaml):
-#   useSystemPodmanAuth: true                    # Use ${XDG_RUNTIME_DIR}/containers/auth.json (recommended)
-#   pullSecretFile: /path/to/pull-secret.txt     # OpenShift pull secret
+#   useSystemPodmanAuth: true                    # Use ~/.config/containers/auth.json (persistent, recommended)
+#   pullSecretFile: /path/to/pull-secret.txt     # OpenShift pull secret file
 #   authFile: ~/.config/containers/auth.json     # Custom auth file path
 useSystemPodmanAuth: false
 pullSecretFile: ""

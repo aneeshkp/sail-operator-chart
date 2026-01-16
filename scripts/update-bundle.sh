@@ -19,10 +19,21 @@ echo "Source: $SOURCE"
 echo "Version: $VERSION"
 echo ""
 
-# Set bundle image
+# Set bundle image and auth
 if [ "$SOURCE" == "redhat" ]; then
   BUNDLE_IMAGE="registry.redhat.io/openshift-service-mesh/istio-sail-operator-bundle:${VERSION}"
-  AUTH_ARG="-v ${XDG_RUNTIME_DIR}/containers/auth.json:/root/.docker/config.json:z"
+  # Check for auth (persistent location first, then session)
+  if [ -f ~/.config/containers/auth.json ]; then
+    AUTH_FILE=~/.config/containers/auth.json
+  elif [ -f "${XDG_RUNTIME_DIR}/containers/auth.json" ]; then
+    AUTH_FILE="${XDG_RUNTIME_DIR}/containers/auth.json"
+  else
+    echo "ERROR: Not logged in to registry.redhat.io"
+    echo "Run: podman login registry.redhat.io"
+    echo "Then: cp ~/pull-secret.txt ~/.config/containers/auth.json"
+    exit 1
+  fi
+  AUTH_ARG="-v ${AUTH_FILE}:/root/.docker/config.json:z"
 else
   BUNDLE_IMAGE="quay.io/redhat-user-workloads/service-mesh-tenant/ossm-3-2-bundle@${VERSION}"
   AUTH_ARG=""
@@ -52,6 +63,7 @@ find "$CHART_DIR/manifests-crds" -name "*.yaml" -delete 2>/dev/null || true
 find "$CHART_DIR/templates" -name "*.yaml" \
   ! -name "pull-secret.yaml" \
   ! -name "istio-cr.yaml" \
+  ! -name "serviceaccount-istiod.yaml" \
   ! -name "post-install-hook.yaml" \
   -delete 2>/dev/null || true
 

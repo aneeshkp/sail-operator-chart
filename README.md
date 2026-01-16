@@ -22,46 +22,44 @@ helmfile apply
 
 ## Configuration
 
-Edit `environments/default.yaml`. Choose ONE auth method:
+### Step 1: Get Red Hat Pull Secret
 
-### Option A: System Podman Auth (Recommended)
+1. Go to: https://console.redhat.com/openshift/install/pull-secret
+2. Login and download pull secret
+3. Save as `~/pull-secret.txt`
+
+### Step 2: Setup Auth (Choose ONE)
+
+#### Option A: Persistent Podman Auth (Recommended)
 
 ```bash
-# 1. Get your pull secret from Red Hat
-#    https://console.redhat.com/openshift/install/pull-secret
-#    Save as: ~/pull-secret.txt
+# Copy pull secret to persistent location
+mkdir -p ~/.config/containers
+cp ~/pull-secret.txt ~/.config/containers/auth.json
 
-# 2. Login to registry using the pull secret
-podman login registry.redhat.io --authfile ~/pull-secret.txt
-
-# 3. Verify login
-podman pull registry.redhat.io/ubi8/ubi-minimal --quiet && echo "Login successful"
+# Verify
+podman pull registry.redhat.io/ubi8/ubi-minimal --quiet && echo "Auth works!"
 ```
 
+Then in `environments/default.yaml`:
 ```yaml
-# environments/default.yaml
 useSystemPodmanAuth: true
 ```
 
-This uses `${XDG_RUNTIME_DIR}/containers/auth.json` automatically.
-
-### Option B: Pull Secret File Directly
+#### Option B: Pull Secret File
 
 ```yaml
 # environments/default.yaml
 pullSecretFile: ~/pull-secret.txt
 ```
 
-### Option C: Konflux (public, no auth)
+#### Option C: Konflux (public, no auth)
 
 ```yaml
 # environments/default.yaml
 bundle:
   source: konflux
-
-# Leave both empty
 pullSecretFile: ""
-authFile: ""
 ```
 
 ## What Gets Deployed
@@ -74,11 +72,12 @@ authFile: ""
 **Helm install:**
 4. Namespace `istio-system`
 5. Pull secret `redhat-pull-secret`
-6. Sail Operator deployment + RBAC
-7. Istio CR with Gateway API enabled
+6. istiod ServiceAccount with `imagePullSecrets` (pre-created)
+7. Sail Operator deployment + RBAC
+8. Istio CR with Gateway API enabled
 
-**Manual step (after install):**
-8. Patch `istiod` ServiceAccount with pull secret (see [Post-Deployment](#post-deployment-pull-secret-configuration))
+**Post-install (automatic):**
+9. Operator deploys istiod (uses pre-created SA with `imagePullSecrets`)
 
 > **Why presync hooks?** CRDs are too large for Helm (some are 700KB+, Helm has 1MB limit) and require `--server-side` apply.
 
@@ -90,6 +89,8 @@ authFile: ""
 | Istio | v1.27.3 | Latest in bundle 3.2.1 |
 | Gateway API CRDs | v1.4.0 | Kubernetes SIG |
 | Gateway API Inference Extension | v1.2.0 | For LLM inference routing |
+
+**OLM Bundle:** `registry.redhat.io/openshift-service-mesh/istio-sail-operator-bundle` ([Red Hat Catalog](https://catalog.redhat.com/software/containers/openshift-service-mesh/istio-operator-bundle))
 
 ### Gateway API Inference Extension (llm-d) Compatibility
 
@@ -111,6 +112,22 @@ For full **InferencePool v1** support (required by [llm-d](https://github.com/ll
 
 # Redeploy
 helmfile apply
+```
+
+## Update Pull Secret
+
+Red Hat pull secrets expire (typically yearly). To update:
+
+```bash
+# Option A: Using system podman auth (after re-login)
+podman login registry.redhat.io
+./scripts/update-pull-secret.sh
+
+# Option B: Using pull secret file
+./scripts/update-pull-secret.sh ~/new-pull-secret.txt
+
+# Restart istiod to use new secret
+kubectl rollout restart deployment/istiod -n istio-system
 ```
 
 ## Verify Installation
@@ -144,25 +161,7 @@ kubectl get pods -n istio-system -l app=istiod
 
 ---
 
-## Post-Deployment: Pull Secret Configuration
-
-### 1. Patch istiod ServiceAccount (after helmfile apply, before llm-d)
-
-After running `helmfile apply`, the Sail Operator creates the istiod pod. Patch its ServiceAccount with the pull secret:
-
-```bash
-# Wait for istiod SA to be created
-kubectl wait --for=create sa/istiod -n istio-system --timeout=300s
-
-# Patch the SA with pull secret
-kubectl patch sa istiod -n istio-system \
-  -p '{"imagePullSecrets": [{"name": "redhat-pull-secret"}]}'
-
-# Restart istiod to pick up the new pull secret
-kubectl delete pod -n istio-system -l app=istiod
-```
-
-### 2. Configure Application Namespace (after llm-d is deployed)
+## Post-Deployment: Pull Secret for Application Namespaces
 
 When deploying applications that use Istio Gateway API (e.g., llm-d), Istio auto-provisions Gateway pods in **your application namespace**. These pods pull `istio-proxyv2` from `registry.redhat.io` and need the pull secret.
 
@@ -223,12 +222,14 @@ sail-operator-chart/
 │   └── default.yaml             # User config (useSystemPodmanAuth)
 ├── manifests-crds/              # 19 Istio CRDs (applied via presync hook)
 ├── templates/
-│   ├── deployment-*.yaml        # Sail Operator deployment
-│   ├── istio-cr.yaml            # Istio CR with Gateway API
-│   ├── pull-secret.yaml         # Registry pull secret
-│   └── *.yaml                   # RBAC, ServiceAccount, etc.
+│   ├── deployment-*.yaml            # Sail Operator deployment
+│   ├── istio-cr.yaml                # Istio CR with Gateway API
+│   ├── pull-secret.yaml             # Registry pull secret
+│   ├── serviceaccount-istiod.yaml   # istiod SA with imagePullSecrets
+│   └── *.yaml                       # RBAC, ServiceAccount, etc.
 └── scripts/
     ├── update-bundle.sh         # Update to new bundle version
+    ├── update-pull-secret.sh    # Update expired pull secret
     ├── cleanup.sh               # Full uninstall
     ├── cleanup-images.sh        # Remove cached images from nodes (uses Eraser)
     ├── copy-pull-secret.sh      # Copy secret to app namespaces
