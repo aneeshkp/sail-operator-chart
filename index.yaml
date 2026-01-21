@@ -1,0 +1,23 @@
+apiVersion: v1
+entries:
+  sail-operator:
+  - apiVersion: v2
+    appVersion: 3.2.1
+    created: "2026-01-21T19:01:04.964128251Z"
+    description: Red Hat Sail Operator (OSSM 3.x) for Kubernetes
+    digest: 5c0ae3ad261fd539b5bcfe9c7b2fa8406908e1f75f20db9b3aedd1cca96ee200
+    keywords:
+    - istio
+    - service-mesh
+    - gateway-api
+    - sail-operator
+    maintainers:
+    - name: Red Hat
+    name: sail-operator
+    sources:
+    - https://github.com/istio-ecosystem/sail-operator
+    type: application
+    urls:
+    - https://aneeshkp.github.io/sail-operator-chart/sail-operator-1.0.1.tgz
+    version: 1.0.1
+generated: "2026-01-21T19:01:04.963426014Z"
